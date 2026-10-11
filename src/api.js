@@ -38,7 +38,7 @@ export async function studio(op, input = {}, code) {
       body: JSON.stringify({ op, input, code }),
     });
   } catch {
-    throw new Error(`Can't reach Videoselz. It may be asleep or turned off; email ${CONTACT} to turn it on.`);
+    throw new Error(`Can't reach Videoselz right now. Reload in a few seconds, or email ${CONTACT} if it keeps happening.`);
   }
   let body = null;
   try {

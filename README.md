@@ -44,10 +44,8 @@ npm run dev
 ```
 
 `VITE_VIDEOSELZ_URL` in `.env` is the Videoselz endpoint. It is a public URL,
-not a secret. The Videoselz side is switched off unless the Videoselz team
-turns it on. Steps that cost money (patterns, products, videos) also need an
-access code. **Email yash@videoselz.com to have it turned on and to get a
-code.**
+not a secret. Steps that cost money (patterns, products, videos) may ask for
+an access code. **Email yash@videoselz.com to get one.**
 
 ## Deploy
 
@@ -61,13 +59,9 @@ The site is static, so it runs on any static host.
 
 ## FAQ
 
-**"The Videoselz API is turned off right now."**
-The Videoselz endpoint runs on a development server that we switch on for
-demos. Email yash@videoselz.com and we'll turn it on.
-
 **"Can't reach Videoselz."**
-The development server may be asleep. Wait a few seconds and reload. If it
-keeps happening, email yash@videoselz.com.
+Wait a few seconds and reload. If it keeps happening, email
+yash@videoselz.com.
 
 **"That access code isn't right."**
 Generating patterns, products and videos costs money, so those steps need the
