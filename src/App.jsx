@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { CONTACT, onCall, studio } from "./api.js";
+import { CONTACT, onCall, startJob, studio } from "./api.js";
 
 // Describe a design → Arcade draws the pattern → Arcade makes it a real
 // product → Videoselz puts it on a Shopify store and makes its videos.
@@ -435,13 +435,13 @@ export default function App() {
 
   const generate = () =>
     run("design", "pattern", async () => {
-      const res = await studio("createPattern", { prompt, colors }, code);
+      const res = await startJob("createPattern", { prompt, colors }, code);
       setPatternJob({ ...res.job, kind: "pattern", startedAt: Date.now() });
     });
 
   const refine = () =>
     run("design", "pattern", async () => {
-      const res = await studio("refinePattern", { patternId: pattern.patternId, instruction }, code);
+      const res = await startJob("refinePattern", { patternId: pattern.patternId, instruction }, code);
       setPatternJob({ ...res.job, kind: "pattern", startedAt: Date.now() });
     });
 
@@ -476,7 +476,7 @@ export default function App() {
 
   const makeProduct = () =>
     run("product", "product", async () => {
-      const res = await studio(
+      const res = await startJob(
         "createProduct",
         { patternId: pattern.patternId, categoryId: category.categoryId, selections: category.selections },
         code,

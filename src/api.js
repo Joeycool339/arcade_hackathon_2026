@@ -49,7 +49,29 @@ export async function studio(op, input = {}, code) {
   const entry = { op, call: ARCADE_CALL[op] ?? op, status: res.status, ms: Math.round(performance.now() - started), at: new Date() };
   if (!["status", "checkCode", "job", "videos"].includes(op)) listeners.forEach((fn) => fn(entry));
   if (!res.ok || !body?.success) {
-    throw new Error(body?.error ?? `Videoselz answered ${res.status}. Email ${CONTACT} if this keeps happening.`);
+    const error = new Error(body?.error ?? `Videoselz answered ${res.status}. Email ${CONTACT} if this keeps happening.`);
+    error.retry = !!body?.retry;
+    throw error;
   }
   return body;
+}
+
+const RETRY_WAIT_MS = 5000;
+const MAX_RETRIES = 12;
+
+/**
+ * Starts an Arcade job. One request key per click, so asking again while
+ * Arcade is still starting the job reuses it instead of starting another.
+ */
+export async function startJob(op, input, code, onWaiting) {
+  const requestKey = crypto.randomUUID();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await studio(op, { ...input, requestKey }, code);
+    } catch (err) {
+      if (!err.retry || attempt >= MAX_RETRIES) throw err;
+      onWaiting?.();
+      await new Promise((resolve) => setTimeout(resolve, RETRY_WAIT_MS));
+    }
+  }
 }
