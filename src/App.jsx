@@ -10,13 +10,26 @@ const VIDEO_POLL_MS = 8000;
 const EXPECTED_MS = { pattern: 90_000, product: 60_000 };
 const DEFAULT_MARKUP = 2.5;
 const CODE_KEY = "arcade-videoselz-code";
+const REPO_URL = "https://github.com/evidanary/arcade_hackathon_2026";
 
-const SWATCHES = ["#1F3A5F", "#3E7CB1", "#A7C7E7", "#F4EDE4", "#C9A227", "#D98E73", "#B5485D", "#6B8F71", "#2F2F2F", "#FFFFFF"];
+const SWATCHES = [
+  { hex: "#1F3A5F", name: "Navy" },
+  { hex: "#3E7CB1", name: "Blue" },
+  { hex: "#A7C7E7", name: "Sky" },
+  { hex: "#F4EDE4", name: "Cream" },
+  { hex: "#C9A227", name: "Mustard" },
+  { hex: "#D98E73", name: "Terracotta" },
+  { hex: "#B5485D", name: "Berry" },
+  { hex: "#6B8F71", name: "Sage" },
+  { hex: "#2F2F2F", name: "Charcoal" },
+  { hex: "#FFFFFF", name: "White" },
+];
 
 const EXAMPLES = [
-  "Small blue and white block-print florals on natural linen",
-  "Hand-drawn lemons and leaves, Mediterranean summer, soft yellow and sage",
-  "Bold 70s retro waves in terracotta, mustard and cream",
+  { label: "Block-print florals", prompt: "Small blue and white block-print florals on natural linen, evenly spread as an all-over repeating pattern" },
+  { label: "Lemons and leaves", prompt: "Hand-drawn lemons and leaves, Mediterranean summer, soft yellow and sage on cream, all-over repeat" },
+  { label: "70s retro waves", prompt: "Bold 70s retro waves in terracotta, mustard and cream, smooth flowing stripes, all-over repeat" },
+  { label: "Watercolour meadow", prompt: "Loose watercolour wildflower meadow: poppies, chamomile and grasses in terracotta, mustard and sage on warm cream, all-over repeat" },
 ];
 
 const VIDEO_LABEL = { loop: "Banner loop", story: "Story", narrated: "Lifestyle video" };
@@ -31,13 +44,26 @@ const money = (amount, currency = "USD") => {
   }
 };
 
-const readCode = () => {
-  try {
-    return sessionStorage.getItem(CODE_KEY) ?? "";
-  } catch {
-    return "";
-  }
+const storage = {
+  get() {
+    try {
+      return sessionStorage.getItem(CODE_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  },
+  set(value) {
+    try {
+      if (value) sessionStorage.setItem(CODE_KEY, value);
+      else sessionStorage.removeItem(CODE_KEY);
+    } catch {
+      // Private mode: the code just isn't remembered.
+    }
+  },
 };
+
+const scrollTo = (ref) =>
+  setTimeout(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
 
 /** Polls an Arcade job until it ends; calls onDone(job) once. Returns progress 0-95. */
 function useArcadeJob(job, onDone, onError) {
@@ -46,8 +72,8 @@ function useArcadeJob(job, onDone, onError) {
     if (!job) return undefined;
     let cancelled = false;
     let timer;
+    const clock = setInterval(() => setNow(Date.now()), 1000);
     const tick = async () => {
-      setNow(Date.now());
       try {
         const res = await studio("job", { jobId: job.jobId });
         if (cancelled) return;
@@ -62,6 +88,7 @@ function useArcadeJob(job, onDone, onError) {
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      clearInterval(clock);
     };
     // onDone/onError are recreated each render; the job is what matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,6 +96,8 @@ function useArcadeJob(job, onDone, onError) {
   if (!job) return null;
   return Math.min(95, Math.round(((now - job.startedAt) / EXPECTED_MS[job.kind]) * 100));
 }
+
+/* ---------- small pieces ---------- */
 
 function Spinner({ small }) {
   return <span className={small ? "spinner spinner-small" : "spinner"} aria-hidden="true" />;
@@ -86,9 +115,11 @@ function Button({ children, loading, variant = "secondary", className = "", ...p
 function Alert({ tone = "critical", children, onDismiss }) {
   return (
     <div className={`alert alert-${tone}`} role={tone === "critical" ? "alert" : "status"}>
-      <div>{children}</div>
+      <div className="alert-body">{children}</div>
       {onDismiss && (
-        <button type="button" className="alert-close" onClick={onDismiss} aria-label="Dismiss">×</button>
+        <button type="button" className="alert-close" onClick={onDismiss} aria-label="Dismiss">
+          ×
+        </button>
       )}
     </div>
   );
@@ -97,10 +128,11 @@ function Alert({ tone = "critical", children, onDismiss }) {
 function Progress({ value, label }) {
   if (value === null) return null;
   return (
-    <div className="progress">
+    <div className="progress" aria-live="polite">
       <div className="progress-label">
         <Spinner small />
         <span>{label}</span>
+        <span className="progress-pct">{value}%</span>
       </div>
       <div className="progress-track">
         <div className="progress-fill" style={{ width: `${value}%` }} />
@@ -109,64 +141,173 @@ function Progress({ value, label }) {
   );
 }
 
-function Step({ number, title, done, children }) {
+function Step({ number, title, hint, done, active, innerRef, children }) {
   return (
-    <section className="card">
+    <section ref={innerRef} className={`step${active ? " step-active" : ""}${done ? " step-done" : ""}`}>
       <header className="step-head">
-        <span className={done ? "step-num step-done" : "step-num"}>{done ? "✓" : number}</span>
-        <h2>{title}</h2>
+        <span className="step-num">{done ? "✓" : number}</span>
+        <div>
+          <h2>{title}</h2>
+          {hint && <p className="step-hint">{hint}</p>}
+        </div>
       </header>
-      {children}
+      <div className="step-body">{children}</div>
     </section>
+  );
+}
+
+function Stepper({ stage }) {
+  const steps = ["Design", "Product", "Videos"];
+  return (
+    <ol className="stepper" aria-label="Progress">
+      {steps.map((name, i) => {
+        const n = i + 1;
+        const state = stage > n ? "done" : stage === n ? "current" : "todo";
+        return (
+          <li key={name} className={`stepper-item stepper-${state}`}>
+            <span className="stepper-dot">{state === "done" ? "✓" : n}</span>
+            <span>{name}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function AccessCard({ needsCode, code, unlocked, onUnlock, onLock, inputRef }) {
+  const [value, setValue] = useState(code);
+  const [checking, setChecking] = useState(false);
+  const [problem, setProblem] = useState(null);
+
+  if (!needsCode) return null;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!value.trim()) return;
+    setChecking(true);
+    setProblem(null);
+    try {
+      await studio("checkCode", {}, value.trim());
+      onUnlock(value.trim());
+    } catch (err) {
+      setProblem(err.message);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  if (unlocked) {
+    return (
+      <div className="access access-on">
+        <span className="access-icon" aria-hidden="true">✓</span>
+        <div className="grow">
+          <strong>Unlocked</strong>
+          <p>You can generate patterns, products and videos.</p>
+        </div>
+        <button type="button" className="link" onClick={onLock}>Change code</button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="access" onSubmit={submit}>
+      <div className="access-top">
+        <span className="access-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="11" width="16" height="10" rx="2" />
+            <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+          </svg>
+        </span>
+        <div>
+          <strong>Enter your access code</strong>
+          <p>Generating uses real Arcade credits, so each visitor needs a code.</p>
+        </div>
+      </div>
+      <div className="access-row">
+        <input
+          ref={inputRef}
+          className="input access-input"
+          type="password"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Access code"
+          autoComplete="off"
+          aria-label="Access code"
+        />
+        <Button variant="primary" type="submit" loading={checking} disabled={!value.trim()}>
+          Unlock
+        </Button>
+      </div>
+      {problem ? <p className="access-error">{problem}</p> : <p className="access-help">No code? Email <a href={`mailto:${CONTACT}`}>{CONTACT}</a></p>}
+    </form>
   );
 }
 
 function VideoTile({ video }) {
   const story = video.variant === "story";
   return (
-    <div className="video-tile">
+    <figure className="video-tile">
       <div className="video-frame">
         {video.outputUrl ? (
           <video src={video.outputUrl} muted loop autoPlay playsInline className={story ? "video-story" : "video-wide"} />
         ) : video.status === "generating" ? (
-          <Spinner />
-        ) : null}
-      </div>
-      <p className="video-title">{story && video.concept ? video.concept : VIDEO_LABEL[video.variant] ?? video.variant}</p>
-      <div className="video-meta">
-        <span className={`badge badge-${video.status}`}>
-          {video.status === "generating" ? "Generating" : video.status === "ready" ? "Ready" : "Failed"}
-        </span>
-        {video.outputUrl && (
-          <a href={video.outputUrl} target="_blank" rel="noreferrer">Watch</a>
+          <div className="video-wait">
+            <Spinner />
+            <span>Generating</span>
+          </div>
+        ) : (
+          <span className="muted">No preview</span>
         )}
       </div>
-    </div>
+      <figcaption>
+        <span className="video-kind">{story ? "Story" : VIDEO_LABEL[video.variant] ?? video.variant}</span>
+        <strong className="video-title">{story && video.concept ? video.concept : VIDEO_LABEL[video.variant] ?? video.variant}</strong>
+        <div className="video-meta">
+          <span className={`badge badge-${video.status}`}>
+            {video.status === "generating" ? "In progress" : video.status === "ready" ? "Ready" : "Failed"}
+          </span>
+          {video.outputUrl && (
+            <a href={video.outputUrl} target="_blank" rel="noreferrer">Open ↗</a>
+          )}
+        </div>
+      </figcaption>
+    </figure>
   );
 }
 
 function CallLog({ calls }) {
-  if (calls.length === 0) return null;
   return (
-    <details className="card calls">
-      <summary>Behind the scenes · {calls.length} Arcade API {calls.length === 1 ? "call" : "calls"}</summary>
-      <ol>
-        {calls.map((c, i) => (
-          <li key={i}>
-            <code>{c.call}</code>
-            <span className={c.status < 300 ? "ok" : "bad"}>{c.status}</span>
-            <span className="muted">{c.ms} ms</span>
-          </li>
-        ))}
-      </ol>
+    <details className="calls">
+      <summary>
+        <span className="calls-dot" aria-hidden="true" />
+        Behind the scenes
+        <span className="calls-count">{calls.length} Arcade API {calls.length === 1 ? "call" : "calls"}</span>
+      </summary>
+      {calls.length === 0 ? (
+        <p className="muted">Calls to the Arcade API appear here as you go.</p>
+      ) : (
+        <ol>
+          {calls.map((c, i) => (
+            <li key={i}>
+              <span className="calls-time">{c.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+              <code>POST /v1/{c.call}</code>
+              <span className={c.status < 300 ? "calls-ok" : "calls-bad"}>{c.status}</span>
+              <span className="calls-ms">{c.ms} ms</span>
+            </li>
+          ))}
+        </ol>
+      )}
     </details>
   );
 }
 
+/* ---------- page ---------- */
+
 export default function App() {
   const [status, setStatus] = useState(null);
   const [down, setDown] = useState(null);
-  const [code, setCode] = useState(readCode);
+  const [code, setCode] = useState(storage.get);
+  const [unlocked, setUnlocked] = useState(false);
   // { message, step }: shown in the card of the step that failed.
   const [error, setErrorState] = useState(null);
   const setError = (message, step = "page") => setErrorState(message ? { message, step } : null);
@@ -184,6 +325,7 @@ export default function App() {
   // 2. Product
   const [categories, setCategories] = useState(null);
   const [category, setCategory] = useState(null);
+  const [pickedId, setPickedId] = useState(null);
   const [choices, setChoices] = useState({});
   const [loadingCategory, setLoadingCategory] = useState(false);
   const [productJob, setProductJob] = useState(null);
@@ -196,27 +338,50 @@ export default function App() {
   const [sent, setSent] = useState(null);
   const [videos, setVideos] = useState([]);
 
+  const codeInput = useRef(null);
+  const productRef = useRef(null);
+  const configRef = useRef(null);
+  const sendRef = useRef(null);
+  const videosRef = useRef(null);
   const videoTimer = useRef(null);
 
-  useEffect(() => onCall((entry) => setCalls((list) => [...list, entry].slice(-30))), []);
+  useEffect(() => onCall((entry) => setCalls((list) => [...list, entry].slice(-40))), []);
 
   useEffect(() => {
     studio("status")
-      .then((res) => {
+      .then(async (res) => {
         setStatus(res);
-        return studio("categories");
+        // A code remembered from earlier in this tab is checked again.
+        const saved = storage.get();
+        if (res.needsCode && saved) {
+          studio("checkCode", {}, saved)
+            .then(() => setUnlocked(true))
+            .catch(() => storage.set(""));
+        }
+        const cats = await studio("categories");
+        setCategories(cats.categories);
       })
-      .then((res) => setCategories(res.categories))
       .catch((err) => setDown(err.message));
   }, []);
 
-  const saveCode = (value) => {
+  const canSpend = status && (!status.needsCode || unlocked);
+
+  const unlock = (value) => {
     setCode(value);
-    try {
-      sessionStorage.setItem(CODE_KEY, value);
-    } catch {
-      // Private mode: the code just isn't remembered.
-    }
+    storage.set(value);
+    setUnlocked(true);
+  };
+
+  const lock = () => {
+    setUnlocked(false);
+    setCode("");
+    storage.set("");
+    setTimeout(() => codeInput.current?.focus(), 50);
+  };
+
+  const askForCode = () => {
+    codeInput.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => codeInput.current?.focus(), 300);
   };
 
   const patternProgress = useArcadeJob(
@@ -224,9 +389,11 @@ export default function App() {
     (job) => {
       setPatternJob(null);
       if (!job.pattern) return setError("Arcade finished but returned no pattern; try again.", "design");
+      const first = !pattern;
       setPattern(job.pattern);
       setPatterns((list) => [job.pattern, ...list.filter((p) => p.patternId !== job.pattern.patternId)].slice(0, 6));
       setInstruction("");
+      if (first) scrollTo(productRef);
     },
     (message) => {
       setPatternJob(null);
@@ -246,6 +413,7 @@ export default function App() {
       setPrice(Number.isFinite(cost) ? (Math.ceil(cost * DEFAULT_MARKUP) - 0.01).toFixed(2) : "");
       setSent(null);
       setVideos([]);
+      scrollTo(sendRef);
     },
     (message) => {
       setProductJob(null);
@@ -291,9 +459,13 @@ export default function App() {
   }, []);
 
   const pickCategory = (categoryId) => {
+    setPickedId(categoryId);
     setChoices({});
+    setCategory(null);
     setProduct(null);
     loadCategory(categoryId, {});
+    // On narrow screens the options sit under the tiles; bring them into view.
+    if (window.matchMedia("(max-width: 900px)").matches) scrollTo(configRef);
   };
 
   const choose = (key, value) => {
@@ -304,7 +476,11 @@ export default function App() {
 
   const makeProduct = () =>
     run("product", "product", async () => {
-      const res = await studio("createProduct", { patternId: pattern.patternId, categoryId: category.categoryId, selections: category.selections }, code);
+      const res = await studio(
+        "createProduct",
+        { patternId: pattern.patternId, categoryId: category.categoryId, selections: category.selections },
+        code,
+      );
       setProductJob({ ...res.job, kind: "product", startedAt: Date.now() });
     });
 
@@ -314,6 +490,7 @@ export default function App() {
     try {
       const res = await studio("publish", { productId: product.productId, title, price }, code);
       setSent(res.published);
+      scrollTo(videosRef);
     } catch (err) {
       setError(err.message, "send");
     } finally {
@@ -327,6 +504,7 @@ export default function App() {
     setPattern(null);
     setPatterns([]);
     setCategory(null);
+    setPickedId(null);
     setChoices({});
     setProduct(null);
     setSent(null);
@@ -355,228 +533,304 @@ export default function App() {
     return () => clearTimeout(videoTimer.current);
   }, [sent]);
 
-  const toggleColor = (color) =>
-    setColors((list) => (list.includes(color) ? list.filter((c) => c !== color) : [...list, color].slice(0, 10)));
+  const toggleColor = (hex) =>
+    setColors((list) => (list.includes(hex) ? list.filter((c) => c !== hex) : [...list, hex].slice(0, 10)));
 
   const cost = product?.unitPrice ? Number(product.unitPrice.amount) : null;
   const margin = cost && Number(price) > 0 ? Number(price) - cost : null;
   const preview = product?.images?.[0] ?? pattern?.imageUrl ?? null;
-  const needsCode = status?.needsCode && !code.trim();
   const busy = !!patternJob || !!productJob || !!starting;
+  const stage = sent ? 4 : product ? 3 : pattern ? 2 : 1;
+  const readyVideos = videos.filter((v) => v.status === "ready").length;
 
   const errorFor = (step) =>
     error?.step === step && <Alert onDismiss={() => setError(null)}>{error.message}</Alert>;
 
+  const lockedNote = !canSpend && status?.needsCode && (
+    <button type="button" className="locked-note" onClick={askForCode}>
+      Enter your access code at the top to start →
+    </button>
+  );
+
+  /* ----- step 1 ----- */
   const designStep = (
-    <Step number={1} title="Describe your design" done={!!pattern}>
+    <Step number={1} title="Describe your design" hint="Arcade draws an all-over pattern from your words." done={!!pattern} active={stage === 1}>
       <textarea
-        className="input"
-        rows={3}
+        className="input prompt"
+        rows={4}
         maxLength={1000}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        placeholder={EXAMPLES[0]}
+        placeholder="e.g. Small blue and white block-print florals on natural linen"
         disabled={!!patternJob}
         aria-label="Describe the pattern"
       />
-      <div className="chips">
-        {EXAMPLES.slice(1).map((example) => (
-          <button key={example} type="button" className="chip" onClick={() => setPrompt(example)} disabled={!!patternJob}>
-            {`Try: ${example.split(",")[0]}`}
+      <div className="chips" aria-label="Ideas">
+        <span className="chips-label">Ideas</span>
+        {EXAMPLES.map((example) => (
+          <button key={example.label} type="button" className="chip" onClick={() => setPrompt(example.prompt)} disabled={!!patternJob}>
+            {example.label}
           </button>
         ))}
       </div>
-      <div>
-        <p className="label">Colours (optional)</p>
+      <div className="field">
+        <span className="label">Colours <span className="muted">· optional</span></span>
         <div className="swatches">
-          {SWATCHES.map((color) => (
+          {SWATCHES.map(({ hex, name }) => (
             <button
-              key={color}
+              key={hex}
               type="button"
-              className={colors.includes(color) ? "swatch swatch-on" : "swatch"}
-              style={{ background: color }}
-              onClick={() => toggleColor(color)}
-              aria-label={color}
-              aria-pressed={colors.includes(color)}
+              className={colors.includes(hex) ? "swatch swatch-on" : "swatch"}
+              style={{ background: hex }}
+              onClick={() => toggleColor(hex)}
+              title={name}
+              aria-label={name}
+              aria-pressed={colors.includes(hex)}
             />
           ))}
         </div>
       </div>
-      <div className="row">
+      <div className="actions">
         <Button
           variant="primary"
           onClick={generate}
           loading={starting === "pattern" || (!!patternJob && !pattern)}
-          disabled={!prompt.trim() || busy || needsCode}
+          disabled={!prompt.trim() || busy || !canSpend}
         >
           {pattern ? "Generate a new pattern" : "Generate pattern"}
         </Button>
-        {needsCode && <span className="muted">Enter the access code above first.</span>}
+        {lockedNote}
       </div>
-      <Progress value={patternProgress} label="Arcade is drawing your pattern. This takes about a minute." />
+      <Progress value={pattern ? null : patternProgress} label="Arcade is drawing your pattern" />
       {errorFor("design")}
 
       {pattern && (
-        <>
-          <hr />
-          <div className="tweak">
-            <label className="grow">
-              <span className="label">Tweak it</span>
-              <input
-                className="input"
-                value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                placeholder="e.g. make the flowers larger and the background warmer"
-                disabled={!!patternJob}
-              />
-            </label>
-            <Button onClick={refine} loading={starting === "pattern" && !!pattern} disabled={!instruction.trim() || busy}>
-              Apply
-            </Button>
+        <div className="refine">
+          <label className="field grow">
+            <span className="label">Tweak it</span>
+            <input
+              className="input"
+              value={instruction}
+              onChange={(e) => setInstruction(e.target.value)}
+              placeholder="e.g. make the flowers larger and the background warmer"
+              disabled={!!patternJob}
+            />
+          </label>
+          <Button onClick={refine} loading={starting === "pattern" || (!!patternJob && !!pattern)} disabled={!instruction.trim() || busy}>
+            Apply
+          </Button>
+        </div>
+      )}
+      {pattern && <Progress value={patternProgress} label="Arcade is redrawing your pattern" />}
+      {patterns.length > 1 && (
+        <div className="versions">
+          <span className="label">Versions</span>
+          <div className="versions-row">
+            {patterns.map((p) => (
+              <button
+                key={p.patternId}
+                type="button"
+                className={p.patternId === pattern.patternId ? "version version-on" : "version"}
+                onClick={() => setPattern(p)}
+                aria-label="Use this version"
+              >
+                <img src={p.thumbnailUrl ?? p.imageUrl} alt="" />
+              </button>
+            ))}
           </div>
-          {patterns.length > 1 && (
-            <div className="versions">
-              {patterns.map((p) => (
-                <button
-                  key={p.patternId}
-                  type="button"
-                  className={p.patternId === pattern.patternId ? "version version-on" : "version"}
-                  onClick={() => setPattern(p)}
-                >
-                  <img src={p.thumbnailUrl ?? p.imageUrl} alt="Pattern version" />
-                </button>
-              ))}
-            </div>
-          )}
-        </>
+        </div>
       )}
     </Step>
   );
 
+  /* ----- step 2 ----- */
+  const picked = categories?.find((c) => c.categoryId === pickedId);
   const productStep = (
-    <Step number={2} title="Choose the product" done={!!product}>
+    <Step
+      number={2}
+      title="Choose the product"
+      hint="Pick what Arcade should make, then its options."
+      done={!!product}
+      active={stage === 2}
+      innerRef={productRef}
+    >
       {!pattern ? (
-        <p className="muted">Generate a pattern first.</p>
+        <p className="empty">Generate a pattern first.</p>
       ) : !categories ? (
         <Spinner />
       ) : (
-        <>
-          <div className="tiles">
+        <div className="picker">
+          <div className="cat-grid" role="listbox" aria-label="Product types">
             {categories.map((c) => (
               <button
                 key={c.categoryId}
                 type="button"
-                className={category?.categoryId === c.categoryId ? "tile tile-on" : "tile"}
+                role="option"
+                aria-selected={pickedId === c.categoryId}
+                className={pickedId === c.categoryId ? "cat cat-on" : "cat"}
                 onClick={() => pickCategory(c.categoryId)}
+                disabled={!!productJob}
               >
-                <div className="tile-img">{c.imageUrl && <img src={c.imageUrl} alt="" />}</div>
-                <strong>{c.name}</strong>
-                {c.group && <span className="muted">{c.group}</span>}
+                <span className="cat-img">{c.imageUrl && <img src={c.imageUrl} alt="" />}</span>
+                <span className="cat-name">{c.name}</span>
+                {c.group && <span className="cat-group">{c.group}</span>}
               </button>
             ))}
           </div>
-          {category && (
-            <>
-              <div className="options">
-                {category.options.map((option) => (
-                  <label key={option.key}>
-                    <span className="label">{option.label}</span>
-                    <select
-                      className="input"
-                      value={category.selections[option.key]}
-                      onChange={(e) => choose(option.key, e.target.value)}
-                      disabled={loadingCategory || !!productJob}
-                    >
-                      {option.values
-                        .filter((v) => v.available || v.value === category.selections[option.key])
-                        .map((v) => (
-                          <option key={v.value} value={v.value}>{v.label}</option>
-                        ))}
-                    </select>
-                  </label>
-                ))}
+
+          <div className="config" ref={configRef}>
+            {!pickedId ? (
+              <div className="config-empty">
+                <span aria-hidden="true">←</span>
+                <p>Pick a product to see its options.</p>
               </div>
-              {!category.canManufacture && (
-                <Alert tone="warning">This combination can't be made. Change one of the options.</Alert>
-              )}
-              <div className="row row-end">
+            ) : !category ? (
+              <div className="config-empty">
+                <Spinner />
+                <p>Loading {picked?.name ?? "options"}…</p>
+              </div>
+            ) : (
+              <>
+                <div className="config-head">
+                  {picked?.imageUrl && <img src={picked.imageUrl} alt="" />}
+                  <div>
+                    <span className="label">Selected</span>
+                    <strong>{category.name}</strong>
+                  </div>
+                  {loadingCategory && <Spinner small />}
+                </div>
+                <div className="config-options">
+                  {category.options.map((option) => (
+                    <label key={option.key} className="field">
+                      <span className="label">{option.label}</span>
+                      <select
+                        className="input"
+                        value={category.selections[option.key]}
+                        onChange={(e) => choose(option.key, e.target.value)}
+                        disabled={loadingCategory || !!productJob}
+                      >
+                        {option.values
+                          .filter((v) => v.available || v.value === category.selections[option.key])
+                          .map((v) => (
+                            <option key={v.value} value={v.value}>
+                              {v.label}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                {!category.canManufacture && (
+                  <Alert tone="warning">This combination can't be made. Change one of the options.</Alert>
+                )}
                 <Button
                   variant="primary"
+                  className="btn-block"
                   onClick={makeProduct}
-                  disabled={!category.canManufacture || loadingCategory || busy}
+                  disabled={!category.canManufacture || loadingCategory || busy || !canSpend}
                   loading={starting === "product" || !!productJob}
                 >
                   {`Create ${category.name}`}
                 </Button>
-              </div>
-              <Progress value={productProgress} label="Arcade is building your product and its photos." />
-            </>
-          )}
-          {errorFor("product")}
-        </>
+                <Progress value={productProgress} label="Arcade is building the product and its photos" />
+                {errorFor("product")}
+              </>
+            )}
+          </div>
+        </div>
       )}
     </Step>
   );
 
   const doneSummary = pattern && product && (
-    <section className="card summary">
+    <section className="summary">
       <img src={pattern.thumbnailUrl ?? pattern.imageUrl} alt="" />
       <div className="grow">
-        <strong>{`✓ Pattern  ·  ✓ ${category?.name ?? "Product"}`}</strong>
+        <strong>Pattern ✓ · {category?.name ?? "Product"} ✓</strong>
         <p className="muted truncate">{product.selectionLabel || prompt}</p>
       </div>
       {!sent && (
-        <button type="button" className="link" onClick={() => setProduct(null)}>Change</button>
+        <button type="button" className="link" onClick={() => setProduct(null)}>
+          Change
+        </button>
       )}
     </section>
   );
 
+  /* ----- step 3 ----- */
   const sendStep = product && (
-    <Step number={3} title="Sell it with videos" done={!!sent}>
+    <Step
+      number={3}
+      title="Sell it with videos"
+      hint="Videoselz lists it on Shopify and makes 3 story videos and a banner loop."
+      done={!!sent}
+      active={stage === 3}
+      innerRef={sendRef}
+    >
       {product.images.length > 1 && (
         <div className="thumbs">
-          {product.images.slice(0, 5).map((url) => (
+          {product.images.slice(0, 6).map((url) => (
             <img key={url} src={url} alt="" />
           ))}
         </div>
       )}
-      <label>
+      <label className="field">
         <span className="label">Product title</span>
         <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} disabled={!!sent} />
       </label>
-      <div className="options">
-        <label>
+      <div className="pricing">
+        <label className="field">
           <span className="label">Your price</span>
-          <input className="input" type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} disabled={!!sent} />
+          <div className="price-input">
+            <span>$</span>
+            <input
+              className="input"
+              type="number"
+              min="0"
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              disabled={!!sent}
+            />
+          </div>
         </label>
-        <div>
-          <span className="label">Made by Arcade</span>
-          <p>{cost !== null ? `${money(cost, product.unitPrice.currency)} per unit` : "Price shown at checkout"}</p>
-          {margin !== null && (
-            <p className={margin > 0 ? "good" : "bad"}>{`${money(margin, product.unitPrice.currency)} profit per sale`}</p>
-          )}
+        <div className="econ">
+          <div>
+            <span className="label">Arcade makes it for</span>
+            <strong>{cost !== null ? money(cost, product.unitPrice.currency) : "—"}</strong>
+          </div>
+          <div>
+            <span className="label">You keep</span>
+            <strong className={margin !== null && margin > 0 ? "good" : "bad"}>
+              {margin !== null ? money(margin, product.unitPrice.currency) : "—"}
+            </strong>
+          </div>
         </div>
       </div>
       {errorFor("send")}
       {!sent ? (
-        <div className="row">
-          <Button variant="primary" className="btn-large" onClick={send} loading={sending} disabled={needsCode}>
+        <div className="actions">
+          <Button variant="accent" className="btn-large" onClick={send} loading={sending} disabled={!canSpend}>
             Send to Videoselz
           </Button>
-          <span className="muted">Videoselz adds it to a Shopify store and makes 3 story videos and a banner loop.</span>
+          {lockedNote}
         </div>
       ) : (
-        <>
+        <div className="sent" ref={videosRef}>
           <Alert tone="success">
             {sent.mock ? (
               "Preview: nothing was published."
             ) : (
               <>
-                <strong>{sent.title}</strong> is on the Videoselz demo store. Videoselz is making 3 story videos and a
-                banner loop; they appear below and on the product page when they're ready.
+                <strong>{sent.title}</strong> is on the Videoselz demo store. Its videos are being made now; each one
+                also goes on the product page when it's ready.
               </>
             )}
           </Alert>
+          <div className="videos-head">
+            <h3>Videos</h3>
+            <span className="muted">{videos.length ? `${readyVideos} of ${videos.length} ready` : "Starting…"}</span>
+          </div>
           {videos.length > 0 ? (
             <div className="videos">
               {[...videos]
@@ -587,54 +841,68 @@ export default function App() {
             </div>
           ) : (
             !sent.mock && (
-              <div className="progress-label">
-                <Spinner small />
-                <span>Starting the videos…</span>
+              <div className="videos">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="video-tile video-skeleton" />
+                ))}
               </div>
             )
           )}
-          <div className="row">
+          <div className="actions">
             <Button onClick={startOver}>Design another</Button>
           </div>
-        </>
+        </div>
       )}
     </Step>
   );
 
   return (
-    <div className="page">
+    <div className="app">
+      <nav className="topbar">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14">
+              <path d="M8 5l11 7-11 7z" fill="currentColor" />
+            </svg>
+          </span>
+          <span>Arcade <span className="brand-x">×</span> Videoselz</span>
+        </div>
+        <div className="topbar-links">
+          <a href="#how">How it works</a>
+          <a href={REPO_URL} target="_blank" rel="noreferrer">GitHub ↗</a>
+        </div>
+      </nav>
+
       <header className="hero">
-        <div>
-          <p className="eyebrow">Arcade × Videoselz</p>
-          <h1>Design a product. Get its videos.</h1>
+        <div className="hero-copy">
+          <p className="eyebrow">Arcade hackathon 2026</p>
+          <h1>
+            Design a product.
+            <br />
+            <em>Get its videos.</em>
+          </h1>
           <p className="lead">
-            Describe a design and <a href="https://www.arcade.ai" target="_blank" rel="noreferrer">Arcade</a> makes it a real,
-            made-to-order product. Videoselz puts it on a Shopify store and makes its story videos and a banner loop.
+            Describe a pattern and <a href="https://www.arcade.ai" target="_blank" rel="noreferrer">Arcade</a> turns it
+            into a real, made-to-order product. Videoselz lists it on Shopify and makes its story videos and a banner loop.
           </p>
         </div>
-        {status?.needsCode && (
-          <label className="code">
-            <span className="label">Access code</span>
-            <input
-              className="input"
-              type="password"
-              value={code}
-              onChange={(e) => saveCode(e.target.value)}
-              placeholder="From the Videoselz team"
-              autoComplete="off"
-            />
-          </label>
-        )}
+        <AccessCard
+          needsCode={status?.needsCode}
+          code={code}
+          unlocked={unlocked}
+          onUnlock={unlock}
+          onLock={lock}
+          inputRef={codeInput}
+        />
       </header>
 
-      {down && (
-        <Alert>{down}</Alert>
-      )}
+      {down && <Alert>{down}</Alert>}
       {status?.mock && <Alert tone="info">Preview mode: Arcade isn't connected on the Videoselz side, so this shows sample data.</Alert>}
-      {errorFor("page")}
 
-      <main className="layout">
-        <div className="stack">
+      <Stepper stage={stage} />
+
+      <main className="workspace">
+        <div className="steps">
           {product ? doneSummary : (
             <>
               {designStep}
@@ -642,20 +910,72 @@ export default function App() {
             </>
           )}
           {sendStep}
-          <CallLog calls={calls} />
         </div>
-        <aside className="card preview">
-          <h3>{product ? product.title : pattern ? "Your pattern" : "Preview"}</h3>
-          <div className="preview-img">
-            {preview ? <img src={preview} alt={product?.title ?? "Pattern"} /> : patternJob ? <Spinner /> : <p className="muted">Your design appears here.</p>}
+
+        <aside className={preview || patternJob ? "preview" : "preview preview-empty"}>
+          <div className="preview-card">
+            <div className="preview-head">
+              <span className="label">{product ? "Your product" : pattern ? "Your pattern" : "Preview"}</span>
+              {product?.unitPrice && <span className="preview-price">{money(price || cost, product.unitPrice.currency)}</span>}
+            </div>
+            <div className={`preview-img${patternJob && !pattern ? " preview-loading" : ""}`}>
+              {preview ? (
+                <img src={preview} alt={product?.title ?? "Pattern"} />
+              ) : patternJob ? (
+                <div className="preview-wait">
+                  <Spinner />
+                  <span>Drawing… {patternProgress ?? 0}%</span>
+                </div>
+              ) : (
+                <div className="preview-wait">
+                  <span className="preview-glyph" aria-hidden="true">✦</span>
+                  <span>Your design appears here</span>
+                </div>
+              )}
+            </div>
+            {product ? (
+              <div className="preview-meta">
+                <strong>{title || product.title}</strong>
+                {product.selectionLabel && <span className="muted">{product.selectionLabel}</span>}
+                {product.maker && <span className="muted">Made by {product.maker}</span>}
+              </div>
+            ) : pattern ? (
+              <p className="muted preview-prompt">{prompt}</p>
+            ) : null}
           </div>
-          {product?.selectionLabel && <p className="muted">{product.selectionLabel}</p>}
+          <CallLog calls={calls} />
         </aside>
       </main>
 
+      <section className="how" id="how">
+        <h2>How it works</h2>
+        <div className="how-grid">
+          <article>
+            <span className="how-num">01</span>
+            <h3>Arcade draws the pattern</h3>
+            <p>Your words and colours go to Arcade, which generates a seamless pattern you can tweak.</p>
+            <code>patterns/create · patterns/refine/edit</code>
+          </article>
+          <article>
+            <span className="how-num">02</span>
+            <h3>Arcade makes the product</h3>
+            <p>Only options that can really be manufactured are offered. Arcade returns mockups, care notes and a unit cost.</p>
+            <code>categories/get · products/create · products/get</code>
+          </article>
+          <article>
+            <span className="how-num">03</span>
+            <h3>Videoselz sells it</h3>
+            <p>Videoselz lists the product on Shopify and makes 3 short story videos and a banner loop for its page.</p>
+            <code>Shopify Admin API · Videoselz</code>
+          </article>
+        </div>
+      </section>
+
       <footer className="footer">
-        Built for the Arcade hackathon with the <a href="https://docs.arcade.ai" target="_blank" rel="noreferrer">Arcade API</a> and{" "}
-        Videoselz. Questions: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
+        <span>Built with the <a href="https://docs.arcade.ai" target="_blank" rel="noreferrer">Arcade API</a> and Videoselz.</span>
+        <span>
+          Questions: <a href={`mailto:${CONTACT}`}>{CONTACT}</a>
+        </span>
       </footer>
     </div>
   );

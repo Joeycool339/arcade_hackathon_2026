@@ -47,7 +47,7 @@ export async function studio(op, input = {}, code) {
     // Not JSON: a platform error page.
   }
   const entry = { op, call: ARCADE_CALL[op] ?? op, status: res.status, ms: Math.round(performance.now() - started), at: new Date() };
-  if (!["status", "job", "videos"].includes(op)) listeners.forEach((fn) => fn(entry));
+  if (!["status", "checkCode", "job", "videos"].includes(op)) listeners.forEach((fn) => fn(entry));
   if (!res.ok || !body?.success) {
     throw new Error(body?.error ?? `Videoselz answered ${res.status}. Email ${CONTACT} if this keeps happening.`);
   }
