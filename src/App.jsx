@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CONTACT, onCall, startJob, studio } from "./api.js";
 
 // Describe a design → Arcade draws the pattern → Arcade makes it a real
-// product → Videoselz puts it on a Shopify store and makes its videos.
+// product → the product goes on a Shopify store and Videoselz makes its videos.
 
 const JOB_POLL_MS = 3000;
 const VIDEO_POLL_MS = 8000;
@@ -768,7 +768,7 @@ export default function App() {
     <Step
       number={3}
       title="Sell it with videos"
-      hint="Videoselz lists it on Shopify and makes 3 story videos and a banner loop."
+      hint="It goes on your Shopify store, and Videoselz makes 3 story videos and a banner loop for its page."
       done={!!sent}
       active={stage === 3}
       innerRef={sendRef}
@@ -889,7 +889,7 @@ export default function App() {
           </h1>
           <p className="lead">
             Describe a pattern and <a href="https://www.arcade.ai" target="_blank" rel="noreferrer">Arcade</a> turns it
-            into a real, made-to-order product. Videoselz lists it on Shopify and makes its story videos and a banner loop.
+            into a real, made-to-order product on your Shopify store. Videoselz makes its story videos and a banner loop.
           </p>
         </div>
         <AccessCard
@@ -969,9 +969,9 @@ export default function App() {
           </article>
           <article>
             <span className="how-num">03</span>
-            <h3>Videoselz sells it</h3>
-            <p>Videoselz lists the product on Shopify and makes 3 short story videos and a banner loop for its page.</p>
-            <code>Shopify Admin API · Videoselz</code>
+            <h3>Videoselz makes the videos</h3>
+            <p>Videoselz creates 3 short story videos and a banner loop. Shopify lists the product, with the videos playing on its product page.</p>
+            <code>Videoselz video pipeline · Shopify product page</code>
           </article>
         </div>
       </section>
