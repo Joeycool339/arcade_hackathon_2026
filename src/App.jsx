@@ -220,7 +220,7 @@ function AccessCard({ needsCode, code, unlocked, onUnlock, onLock, inputRef }) {
         </span>
         <div>
           <strong>Enter your access code</strong>
-          <p>Generating uses real Arcade credits, so each visitor needs a code.</p>
+          <p>Generating uses real Arcade credits, so this demo asks for a code.</p>
         </div>
       </div>
       <div className="access-row">
@@ -238,7 +238,13 @@ function AccessCard({ needsCode, code, unlocked, onUnlock, onLock, inputRef }) {
           Unlock
         </Button>
       </div>
-      {problem ? <p className="access-error">{problem}</p> : <p className="access-help">No code? Email <a href={`mailto:${CONTACT}`}>{CONTACT}</a></p>}
+      {problem ? (
+        <p className="access-error">{problem}</p>
+      ) : (
+        <p className="access-help">
+          Demo code: <button type="button" className="code-hint" onClick={() => setValue("12345")}>12345</button>
+        </p>
+      )}
     </form>
   );
 }
